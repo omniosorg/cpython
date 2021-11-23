@@ -268,6 +268,30 @@ PyCode_NewWithPosOnlyArgs(int argcount, int posonlyargcount, int kwonlyargcount,
     co->co_opcache = NULL;
     co->co_opcache_flag = 0;
     co->co_opcache_size = 0;
+
+#ifdef WITH_DTRACE
+    i = PyBytes_Size(co->co_code);
+    co->co_linenos = PyMem_Malloc(sizeof(unsigned short) * i);
+    if (co->co_linenos) {
+        unsigned short *p = (unsigned short *)(co->co_linenos);
+        unsigned char *p2 = (unsigned char*)PyBytes_AsString(co->co_linetable);
+        int size = PyBytes_Size(co->co_linetable) / 2;
+        int i2;
+        unsigned short offset = 0;
+
+        while (size) {
+            size -= 1;
+            i2 = *p2++;
+            i-=i2;
+            while (i2--)
+                *p++ = offset;
+            offset += *p2++;
+        }
+        while(i--)
+            *p++ = offset;
+    }
+#endif
+
     return co;
 }
 
