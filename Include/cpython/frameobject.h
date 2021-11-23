@@ -67,12 +67,15 @@ PyAPI_DATA(PyTypeObject) PyFrame_Type;
 
 #define PyFrame_Check(op) Py_IS_TYPE(op, &PyFrame_Type)
 
+#ifndef PYDTRACE_STACK_HELPER
+/* XXX - why does the dtrace compiler get upset with these lines? */
 PyAPI_FUNC(PyFrameObject *) PyFrame_New(PyThreadState *, PyCodeObject *,
                                         PyObject *, PyObject *);
 
 /* only internal use */
 PyFrameObject*
 _PyFrame_New_NoTrack(PyThreadState *, PyFrameConstructor *, PyObject *);
+#endif
 
 
 /* The rest of the interface is specific for frame objects */

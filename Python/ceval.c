@@ -1573,8 +1573,14 @@ eval_frame_handle_pending(PyThreadState *tstate)
 #endif
 
 
-PyObject* _Py_HOT_FUNCTION
+PyObject*
+#ifdef WITH_DTRACE
+_PyEval_EvalFrameDefaultReal(
+    long a1, long a2, long a3, long a4, PyThreadState *tstate, int throwflag,
+    PyFrameObject *f)
+#else
 _PyEval_EvalFrameDefault(PyThreadState *tstate, PyFrameObject *f, int throwflag)
+#endif
 {
     _Py_EnsureTstateNotNULL(tstate);
 
@@ -4566,6 +4572,28 @@ exit_eval_frame:
 
     return _Py_CheckFunctionResult(tstate, NULL, retval, __func__);
 }
+
+#ifdef WITH_DTRACE
+
+/*
+ * These shenanigans look like utter madness, but what we're actually doing is
+ * making sure that the ustack helper will see the PyFrameObject pointer on the
+ * stack.
+ *
+ * We use up the six registers for passing arguments, meaning the call can't
+ * use a register for passing 'f', and has to push it onto the stack in a known
+ * location.
+ */
+
+PyObject* __attribute__((noinline))
+_PyEval_EvalFrameDefault(PyThreadState *tstate, PyFrameObject *f, int throwflag)
+{
+    volatile PyObject *f2;
+    f2 = _PyEval_EvalFrameDefaultReal(0, 0, 0, 0, tstate, throwflag, f);
+    return (PyObject *)f2;
+}
+#endif
+
 
 static void
 format_missing(PyThreadState *tstate, const char *kind,

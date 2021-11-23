@@ -40,6 +40,9 @@ struct PyCodeObject {
     PyObject *co_name;          /* unicode (name, for reference) */
     PyObject *co_linetable;     /* string (encoding addr<->lineno mapping) See
                                    Objects/lnotab_notes.txt for details. */
+#ifdef WITH_DTRACE
+    unsigned short *co_linenos; /* dtrace ustack helper */
+#endif
     void *co_zombieframe;       /* for optimization only (see frameobject.c) */
     PyObject *co_weakreflist;   /* to support weakrefs to code objects */
     /* Scratch space for extra data relating to the code object.
