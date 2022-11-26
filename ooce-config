@@ -1,0 +1,38 @@
+#!/bin/sh
+
+export SETUPTOOLS_USE_DISTUTILS=stdlib
+
+export CCSHARED CPPFLAGS
+./configure \
+	--enable-shared \
+	--with-dtrace \
+	--with-system-ffi \
+	--with-system-expat \
+	--enable-ipv6 \
+	--without-ensurepip \
+	--disable-optimizations \
+	DFLAGS=-64 \
+	CCSHARED=-fPIC \
+	CPPFLAGS="-I/usr/include/ncurses -D_LARGEFILE64_SOURCE `pkg-config --cflags libffi`" \
+	ac_cv_func_getentropy=no \
+	ac_cv_func_hstrerror=no
+
+exit 0
+
+### Test notes
+
+LD_LIBRARY_PATH=. \
+    dtrace -s Lib/test/dtracedata/call_stack.d \
+    -c './python Lib/test/dtracedata/call_stack.py'
+
+dtrace -ln 'python$target:::' -c './python Lib/test/dtracedata/call_stack.py'
+
+dtrace -n 'python$target:::function-entry{trace(copyinstr(arg0))}' \
+    -c './python Lib/test/dtracedata/call_stack.py'
+
+dtrace -n 'python$target:::function-entry{trace(copyinstr(arg1))}' \
+    -c './python Lib/test/dtracedata/call_stack.py'
+
+dtrace -n 'python$target:::function-entry{trace(copyinstr(arg1))}' \
+    -c 'python3 Lib/test/dtracedata/call_stack.py'
+
