@@ -448,6 +448,10 @@ init_code(PyCodeObject *co, struct _PyCodeConstructor *con)
     co->_co_firsttraceable = entry_point;
     _PyCode_Quicken(co);
     notify_code_watchers(PY_CODE_EVENT_CREATE, co);
+
+#ifdef WITH_DTRACE
+    (void) _PyCode_InitLineArray(co);
+#endif
 }
 
 static int

@@ -503,6 +503,7 @@ extern char * _getpty(int *, int, mode_t, int);
 #       define HAVE_DECLSPEC_DLL
 #endif
 
+
 #include "exports.h"
 
 /* only get special linkage if built as shared or platform is Cygwin */

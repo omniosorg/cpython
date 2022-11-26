@@ -651,7 +651,13 @@ static inline void _Py_LeaveRecursiveCallPy(PyThreadState *tstate)  {
 #define PY_EVAL_C_STACK_UNITS 2
 
 PyObject* _Py_HOT_FUNCTION
+#ifdef WITH_DTRACE
+_PyEval_EvalFrameDefaultReal(
+    long a1, long a2, long a3, long a4, PyThreadState *tstate, int throwflag,
+    _PyInterpreterFrame *frame)
+#else
 _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
+#endif
 {
     _Py_EnsureTstateNotNULL(tstate);
     CALL_STAT_INC(pyeval_calls);
@@ -1018,6 +1024,29 @@ resume_with_error:
 #elif defined(_MSC_VER) /* MS_WINDOWS */
 #  pragma warning(pop)
 #endif
+
+#ifdef WITH_DTRACE
+
+/*
+ * These shenanigans look like utter madness, but what we're actually doing is
+ * making sure that the ustack helper will see the PyFrameObject pointer on the
+ * stack.
+ *
+ * We use up the six registers for passing arguments, meaning the call can't
+ * use a register for passing 'f', and has to push it onto the stack in a known
+ * location.
+ */
+
+PyObject* __attribute__((noinline))
+_PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *f,
+    int throwflag)
+{
+    volatile PyObject *f2;
+    f2 = _PyEval_EvalFrameDefaultReal(0, 0, 0, 0, tstate, throwflag, f);
+    return (PyObject *)f2;
+}
+#endif
+
 
 static void
 format_missing(PyThreadState *tstate, const char *kind,
@@ -2783,6 +2812,69 @@ PyUnstable_Eval_RequestCodeExtraIndex(freefunc free)
     new_index = interp->co_extra_user_count++;
     interp->co_extra_freefuncs[new_index] = free;
     return new_index;
+}
+
+static void
+dtrace_function_entry(_PyInterpreterFrame *frame)
+{
+    const char *filename;
+    const char *funcname;
+    int lineno;
+
+    PyCodeObject *code = frame->f_code;
+    filename = PyUnicode_AsUTF8(code->co_filename);
+    funcname = PyUnicode_AsUTF8(code->co_name);
+    lineno = _PyInterpreterFrame_GetLine(frame);
+
+    PyDTrace_FUNCTION_ENTRY((char *)filename, (char *)funcname, lineno);
+}
+
+static void
+dtrace_function_return(_PyInterpreterFrame *frame)
+{
+    const char *filename;
+    const char *funcname;
+    int lineno;
+
+    PyCodeObject *code = frame->f_code;
+    filename = PyUnicode_AsUTF8(code->co_filename);
+    funcname = PyUnicode_AsUTF8(code->co_name);
+    lineno = _PyInterpreterFrame_GetLine(frame);
+
+    PyDTrace_FUNCTION_RETURN((char *)filename, (char *)funcname, lineno);
+}
+
+/* DTrace equivalent of maybe_call_line_trace. */
+static void
+maybe_dtrace_line(_PyInterpreterFrame *frame,
+                  PyTraceInfo *trace_info,
+                  int instr_prev)
+{
+    const char *co_filename, *co_name;
+
+    /* If the last instruction executed isn't in the current
+       instruction window, reset the window.
+    */
+    initialize_trace_info(trace_info, frame);
+    int lastline = _PyCode_CheckLineNumber(instr_prev*sizeof(_Py_CODEUNIT), &trace_info->bounds);
+    int addr = _PyInterpreterFrame_LASTI(frame) * sizeof(_Py_CODEUNIT);
+    int line = _PyCode_CheckLineNumber(addr, &trace_info->bounds);
+    if (line != -1) {
+        /* Trace backward edges or first instruction of a new line */
+        if (_PyInterpreterFrame_LASTI(frame) < instr_prev ||
+            (line != lastline && addr == trace_info->bounds.ar_start))
+        {
+            co_filename = PyUnicode_AsUTF8(frame->f_code->co_filename);
+            if (!co_filename) {
+                co_filename = "?";
+            }
+            co_name = PyUnicode_AsUTF8(frame->f_code->co_name);
+            if (!co_name) {
+                co_name = "?";
+            }
+            PyDTrace_LINE((char *)co_filename, (char *)co_name, line);
+        }
+    }
 }
 
 /* Implement Py_EnterRecursiveCall() and Py_LeaveRecursiveCall() as functions
