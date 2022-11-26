@@ -1,0 +1,53 @@
+#!/bin/sh
+
+export SETUPTOOLS_USE_DISTUTILS=stdlib
+
+CFLAGS=" \
+	-O0 \
+	-fno-inline-small-functions \
+	-fno-inline-functions-called-once \
+	-fno-ipa-cp \
+	-fno-ipa-icf \
+	-fno-clone-functions \
+	-fno-reorder-functions \
+	-fno-reorder-blocks-and-partition \
+	-fno-aggressive-loop-optimizations \
+"
+
+export CCSHARED CPPFLAGS CFLAGS
+./configure \
+	--enable-shared \
+	--with-dtrace \
+	--with-system-expat \
+	--enable-ipv6 \
+	--without-ensurepip \
+	--disable-optimizations \
+	DFLAGS=-64 \
+	CCSHARED=-fPIC \
+	CFLAGS="$CFLAGS" \
+	CPPFLAGS="-I/usr/include/ncurses -D_LARGEFILE64_SOURCE" \
+	ac_cv_func_getentropy=no \
+	ac_cv_func_hstrerror=no
+
+exit 0
+
+### Test notes
+
+LD_LIBRARY_PATH=. \
+    dtrace -s Lib/test/dtracedata/call_stack.d \
+    -c './python Lib/test/dtracedata/call_stack.py'
+
+dtrace -ln 'python$target:::' -c './python Lib/test/dtracedata/call_stack.py'
+
+dtrace -n 'python$target:::function-entry{trace(copyinstr(arg0))}' \
+    -c './python Lib/test/dtracedata/call_stack.py'
+
+dtrace -n 'python$target:::function-entry{trace(copyinstr(arg1))}' \
+    -c './python Lib/test/dtracedata/call_stack.py'
+
+dtrace -n 'python$target:::function-entry{trace(copyinstr(arg1))}' \
+    -c 'python3 Lib/test/dtracedata/call_stack.py'
+
+dtrace -n 'python$target:::function-entry/copyinstr(arg1) == "function_3"/{printf("%s %s\n", copyinstr(arg0), copyinstr(arg1)); jstack()}' \
+    -c './python Lib/test/dtracedata/call_stack.py'
+
