@@ -1632,7 +1632,13 @@ typedef struct {
     (call_shape.kwnames == NULL ? 0 : ((int)PyTuple_GET_SIZE(call_shape.kwnames)))
 
 PyObject* _Py_HOT_FUNCTION
+#ifdef WITH_DTRACE
+_PyEval_EvalFrameDefaultReal(
+    long a1, long a2, long a3, long a4, PyThreadState *tstate, int throwflag,
+    _PyInterpreterFrame *frame)
+#else
 _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
+#endif
 {
     _Py_EnsureTstateNotNULL(tstate);
     CALL_STAT_INC(pyeval_calls);
@@ -5841,6 +5847,29 @@ resume_with_error:
 
 }
 
+#ifdef WITH_DTRACE
+
+/*
+ * These shenanigans look like utter madness, but what we're actually doing is
+ * making sure that the ustack helper will see the PyFrameObject pointer on the
+ * stack.
+ *
+ * We use up the six registers for passing arguments, meaning the call can't
+ * use a register for passing 'f', and has to push it onto the stack in a known
+ * location.
+ */
+
+PyObject* __attribute__((noinline))
+_PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *f,
+    int throwflag)
+{
+    volatile PyObject *f2;
+    f2 = _PyEval_EvalFrameDefaultReal(0, 0, 0, 0, tstate, throwflag, f);
+    return (PyObject *)f2;
+}
+#endif
+
+
 static void
 format_missing(PyThreadState *tstate, const char *kind,
                PyCodeObject *co, PyObject *names, PyObject *qualname)
@@ -7891,7 +7920,7 @@ dtrace_function_entry(_PyInterpreterFrame *frame)
     funcname = PyUnicode_AsUTF8(code->co_name);
     lineno = _PyInterpreterFrame_GetLine(frame);
 
-    PyDTrace_FUNCTION_ENTRY(filename, funcname, lineno);
+    PyDTrace_FUNCTION_ENTRY((char *)filename, (char *)funcname, lineno);
 }
 
 static void
@@ -7906,7 +7935,7 @@ dtrace_function_return(_PyInterpreterFrame *frame)
     funcname = PyUnicode_AsUTF8(code->co_name);
     lineno = _PyInterpreterFrame_GetLine(frame);
 
-    PyDTrace_FUNCTION_RETURN(filename, funcname, lineno);
+    PyDTrace_FUNCTION_RETURN((char *)filename, (char *)funcname, lineno);
 }
 
 /* DTrace equivalent of maybe_call_line_trace. */
@@ -7937,7 +7966,7 @@ maybe_dtrace_line(_PyInterpreterFrame *frame,
             if (!co_name) {
                 co_name = "?";
             }
-            PyDTrace_LINE(co_filename, co_name, line);
+            PyDTrace_LINE((char *)co_filename, (char *)co_name, line);
         }
     }
 }

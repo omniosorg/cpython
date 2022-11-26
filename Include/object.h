@@ -76,9 +76,11 @@ whose size is determined when the object is allocated.
 /* PyObject_HEAD defines the initial segment of every PyObject. */
 #define PyObject_HEAD                   PyObject ob_base;
 
+#ifndef PYDTRACE_STACK_HELPER
 #define PyObject_HEAD_INIT(type)        \
     { _PyObject_EXTRA_INIT              \
     1, type },
+#endif
 
 #define PyVarObject_HEAD_INIT(type, size)       \
     { PyObject_HEAD_INIT(type) size },

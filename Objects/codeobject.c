@@ -347,6 +347,10 @@ init_code(PyCodeObject *co, struct _PyCodeConstructor *con)
         entry_point++;
     }
     co->_co_firsttraceable = entry_point;
+
+#ifdef WITH_DTRACE
+    (void) _PyCode_InitLineArray(co);
+#endif
 }
 
 static int
