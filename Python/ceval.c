@@ -182,6 +182,12 @@ lltrace_resume_frame(_PyInterpreterFrame *frame)
 }
 #endif
 
+#if 0
+static void maybe_dtrace_line(_PyInterpreterFrame *, PyTraceInfo *, int);
+#endif
+static void dtrace_function_entry(_PyInterpreterFrame *);
+static void dtrace_function_return(_PyInterpreterFrame *);
+
 static void monitor_raise(PyThreadState *tstate,
                  _PyInterpreterFrame *frame,
                  _Py_CODEUNIT *instr);
@@ -716,6 +722,7 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int 
         if (_Py_EnterRecursivePy(tstate)) {
             goto exit_unwind;
         }
+	DTRACE_FUNCTION_ENTRY();
         /* Because this avoids the RESUME,
          * we need to update instrumentation */
         _Py_Instrument(frame->f_code, tstate->interp);
@@ -742,6 +749,7 @@ start_frame:
         goto exit_unwind;
     }
 
+    DTRACE_FUNCTION_ENTRY();
 resume_frame:
     SET_LOCALS_FROM_FRAME();
 
@@ -957,6 +965,7 @@ exception_unwind:
                 }
                 assert(STACK_LEVEL() == 0);
                 _PyFrame_SetStackPointer(frame, stack_pointer);
+		DTRACE_FUNCTION_EXIT();
                 monitor_unwind(tstate, frame, next_instr-1);
                 goto exit_unwind;
             }
@@ -2780,6 +2789,70 @@ PyUnstable_Eval_RequestCodeExtraIndex(freefunc free)
     interp->co_extra_freefuncs[new_index] = free;
     return new_index;
 }
+
+static void
+dtrace_function_entry(_PyInterpreterFrame *frame)
+{
+    const char *filename;
+    const char *funcname;
+    int lineno;
+
+    PyCodeObject *code = frame->f_code;
+    filename = PyUnicode_AsUTF8(code->co_filename);
+    funcname = PyUnicode_AsUTF8(code->co_name);
+    lineno = PyUnstable_InterpreterFrame_GetLine(frame),
+
+    PyDTrace_FUNCTION_ENTRY(filename, funcname, lineno);
+}
+
+static void
+dtrace_function_return(_PyInterpreterFrame *frame)
+{
+    const char *filename;
+    const char *funcname;
+    int lineno;
+
+    PyCodeObject *code = frame->f_code;
+    filename = PyUnicode_AsUTF8(code->co_filename);
+    funcname = PyUnicode_AsUTF8(code->co_name);
+    lineno = PyUnstable_InterpreterFrame_GetLine(frame),
+
+    PyDTrace_FUNCTION_RETURN(filename, funcname, lineno);
+}
+#if 0
+/* DTrace equivalent of maybe_call_line_trace. */
+static void
+maybe_dtrace_line(_PyInterpreterFrame *frame,
+                  PyTraceInfo *trace_info,
+                  int instr_prev)
+{
+    const char *co_filename, *co_name;
+
+    /* If the last instruction executed isn't in the current
+       instruction window, reset the window.
+    */
+    initialize_trace_info(trace_info, frame);
+    int lastline = _PyCode_CheckLineNumber(instr_prev*sizeof(_Py_CODEUNIT), &trace_info->bounds);
+    int addr = _PyInterpreterFrame_LASTI(frame) * sizeof(_Py_CODEUNIT);
+    int line = _PyCode_CheckLineNumber(addr, &trace_info->bounds);
+    if (line != -1) {
+        /* Trace backward edges or first instruction of a new line */
+        if (_PyInterpreterFrame_LASTI(frame) < instr_prev ||
+            (line != lastline && addr == trace_info->bounds.ar_start))
+        {
+            co_filename = PyUnicode_AsUTF8(frame->f_code->co_filename);
+            if (!co_filename) {
+                co_filename = "?";
+            }
+            co_name = PyUnicode_AsUTF8(frame->f_code->co_name);
+            if (!co_name) {
+                co_name = "?";
+            }
+            PyDTrace_LINE(co_filename, co_name, line);
+        }
+    }
+}
+#endif
 
 /* Implement Py_EnterRecursiveCall() and Py_LeaveRecursiveCall() as functions
    for the limited API. */

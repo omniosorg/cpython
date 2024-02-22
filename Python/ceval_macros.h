@@ -281,6 +281,11 @@ GETITEM(PyObject *v, Py_ssize_t i) {
 #define BUILTINS() frame->f_builtins
 #define LOCALS() frame->f_locals
 
+#define DTRACE_FUNCTION_EXIT() \
+    if (PyDTrace_FUNCTION_RETURN_ENABLED()) { \
+        dtrace_function_return(frame); \
+    }
+
 #define DTRACE_FUNCTION_ENTRY()  \
     if (PyDTrace_FUNCTION_ENTRY_ENABLED()) { \
         dtrace_function_entry(frame); \

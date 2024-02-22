@@ -126,7 +126,7 @@ class TraceTests:
     def test_verify_call_opcodes(self):
         """Ensure our call stack test hits all function call opcodes"""
 
-        opcodes = set(["CALL_FUNCTION", "CALL_FUNCTION_EX", "CALL_FUNCTION_KW"])
+        opcodes = set(["CALL", "CALL_FUNCTION_EX"])
 
         with open(abspath("call_stack.py")) as f:
             code_string = f.read()
@@ -183,6 +183,8 @@ class CheckDtraceProbes(unittest.TestCase):
                 print(f"readelf version: {readelf_major_version}.{readelf_minor_version}")
         else:
             raise unittest.SkipTest("CPython must be configured with the --with-dtrace option.")
+        # These checks are only relevant with the SystemTap backend
+        SystemTapBackend().assert_usable()
 
 
     @staticmethod
