@@ -154,6 +154,37 @@ class TraceTests:
     def test_line(self):
         self.run_case("line")
 
+    def _jstack(self, name):
+        def _jstack_decode(str):
+            # When compiling with '--with-pydebug'
+            str = "".join(re.split(r'\[[0-9]+ refs\]', str))
+
+            str = [i for i in str.split("\n") \
+                if (("[" in i) and not i.endswith(" (<module>) ]"))]
+            str = "\n".join(str)
+            str = str.replace("\r", "").replace(" ", "")
+            return str
+
+        df = abspath(name + self.backend.EXTENSION)
+        pyf = abspath(name + ".py")
+
+        output = self.backend.trace_python(script_file=df, python_file=pyf,
+            optimize_python=self.optimize_python)
+
+        actual_result = _jstack_decode(output).replace(pyf, 'PyFile')
+
+        with open(abspath(name + self.backend.EXTENSION + ".expected")) as f:
+            expected_result = f.read().rstrip()
+
+        expected_result = expected_result.replace("\r", "").replace(" ", "")
+
+        self.assertEqual(actual_result, expected_result)
+
+    def test_jstack(self):
+        self._jstack("jstack")
+
+    def test_unicode_jstack(self):
+        self._jstack("unicode-jstack")
 
 class DTraceNormalTests(TraceTests, unittest.TestCase):
     backend = DTraceBackend()

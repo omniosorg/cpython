@@ -1572,17 +1572,46 @@ Python/frozen.o: $(FROZEN_FILES_OUT)
 # an include guard, so we can't use a pipeline to transform its output.
 Include/pydtrace_probes.h: $(srcdir)/Include/pydtrace.d
 	$(MKDIR_P) Include
-	$(DTRACE) $(DFLAGS) -o $@ -h -s $<
+	$(DTRACE) $(DFLAGS) -C -o $@ -h -s $<
 	: sed in-place edit with POSIX-only tools
 	sed 's/PYTHON_/PyDTrace_/' $@ > $@.tmp
 	mv $@.tmp $@
+
+Include/pydtrace_offsets: $(srcdir)/Include/pydtrace_offsets.c
+	$(MKDIR_P) Include
+	$(CC) $(PY_CORE_CFLAGS) -o $@ $<
+
+Include/pydtrace_offsets.h: Include/pydtrace_offsets
+	$< > $@
+
+Include/pydtrace_symbols: $(srcdir)/Include/pydtrace_symbols.sh
+	$(MKDIR_P) Include
+	cp $< $@
+	chmod +x $@
+
+Include/pydtrace_symbols.h: Include/pydtrace_symbols Python/ceval.o
+	$^ > $@
+
+Include/dtrace.cpp: $(srcdir)/Include/dtrace.cpp.sh
+	$(MKDIR_P) Include
+	cp $< $@
+	chmod +x $@
+
+clean-dtrace:
+	rm -f Include/dtrace.cpp Include/pydtrace_symbols
+	rm -f Include/pydtrace_offsets Include/pydtrace_offsets.h
+	rm -f Include/pydtrace_symbols.h
 
 Python/ceval.o: $(srcdir)/Include/pydtrace.h
 Python/import.o: $(srcdir)/Include/pydtrace.h
 Modules/gcmodule.o: $(srcdir)/Include/pydtrace.h
 
+Python/pydtrace.o: Include/dtrace.cpp
+Python/pydtrace.o: Include/pydtrace_offsets.h Include/pydtrace_symbols.h
 Python/pydtrace.o: $(srcdir)/Include/pydtrace.d $(DTRACE_DEPS)
-	$(DTRACE) $(DFLAGS) -o $@ -G -s $< $(DTRACE_DEPS)
+	$(DTRACE) $(DFLAGS) -DPYDTRACE_STACK_HELPER $(PY_CPPFLAGS) \
+	    -C -xcpppath=./Include/dtrace.cpp \
+	    -o $@ -G -s $< $(DTRACE_DEPS)
 
 Objects/typeobject.o: Objects/typeslots.inc
 
@@ -2681,7 +2710,7 @@ profile-removal:
 	rm -f profile-bolt-stamp
 
 .PHONY: clean
-clean: clean-retain-profile clean-bolt
+clean: clean-retain-profile clean-bolt clean-dtrace
 	@if test @DEF_MAKE_ALL_RULE@ = profile-opt -o @DEF_MAKE_ALL_RULE@ = bolt-opt; then \
 		rm -f profile-gen-stamp profile-clean-stamp; \
 		$(MAKE) profile-removal; \

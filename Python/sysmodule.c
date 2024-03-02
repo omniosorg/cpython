@@ -237,7 +237,7 @@ sys_audit_tstate(PyThreadState *ts, const char *event,
 
     /* Dtrace USDT point */
     if (dtrace) {
-        PyDTrace_AUDIT(event, (void *)eventArgs);
+        PyDTrace_AUDIT((char *)event, (void *)eventArgs);
     }
 
     /* Call interpreter hooks */

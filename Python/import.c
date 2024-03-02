@@ -2774,13 +2774,13 @@ import_find_and_load(PyThreadState *tstate, PyObject *abs_name)
     }
 
     if (PyDTrace_IMPORT_FIND_LOAD_START_ENABLED())
-        PyDTrace_IMPORT_FIND_LOAD_START(PyUnicode_AsUTF8(abs_name));
+        PyDTrace_IMPORT_FIND_LOAD_START((char *)PyUnicode_AsUTF8(abs_name));
 
     mod = PyObject_CallMethodObjArgs(IMPORTLIB(interp), &_Py_ID(_find_and_load),
                                      abs_name, IMPORT_FUNC(interp), NULL);
 
     if (PyDTrace_IMPORT_FIND_LOAD_DONE_ENABLED())
-        PyDTrace_IMPORT_FIND_LOAD_DONE(PyUnicode_AsUTF8(abs_name),
+        PyDTrace_IMPORT_FIND_LOAD_DONE((char *)PyUnicode_AsUTF8(abs_name),
                                        mod != NULL);
 
     if (import_time) {
